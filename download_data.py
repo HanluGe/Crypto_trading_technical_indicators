@@ -1,5 +1,4 @@
 import os
-import shutil
 import requests
 import pandas as pd
 import datetime
@@ -28,9 +27,7 @@ class BinanceDataManager:
         max_workers: int = 10,
     ):
         self._save_path = save_path
-        self._export_path = f"{self._save_path}/export"
         os.makedirs(self._save_path, exist_ok=True)
-        os.makedirs(self._export_path, exist_ok=True)
         self._interval = interval
         self._start_date = start_date
         self._end_date = end_date
@@ -145,20 +142,6 @@ class BinanceDataManager:
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         df[['open', 'high', 'low', 'close', 'volume']] = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
         return df
-        
-    def _fix_constituents(self) -> None:
-        today = str(datetime.date.today())
-        path = f"{self._qlib_export_path}/instruments"
-
-        for p in Path(path).iterdir():
-            if p.stem == "all":
-                continue
-            df = pd.read_csv(p, sep='\t', header=None)
-            df.sort_values([2, 1, 0], ascending=[False, False, True], inplace=True)     # type: ignore
-            latest_data = df[2].max()
-            df[2] = df[2].replace(latest_data, today)
-            #import pdb;pdb.set_trace()
-            df.to_csv(p, header=False, index=False, sep='\t')
 
     def fetch_and_save_data(self):
         """Fetch Kline data and save it to a CSV file."""
@@ -185,9 +168,9 @@ def collect_data(interval, start_date,end_date,save_path):
 
 if __name__ == "__main__":
     collect_data(
-        interval = ("1h","5min"),  # 60 minute interval
+        interval = ("5m","5min"),  # 5 minute interval
         start_date = "2022-01-01 00:00:00",
-        end_date = "2022-01-31 00:00:00",
+        end_date = "2022-12-31 00:00:00",
         save_path = "data/cpt_5min")
     
     # collect_data(
