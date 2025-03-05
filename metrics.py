@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def calculate_cumulative_asset(series_close, series_position, initial_cash=10000, trade_size=1):
+def calculate_cumulative_asset(series_close, series_position, initial_cash=10000, trade_size=1,fee_rate=0.0002):
     
     cash = initial_cash  # Available cash
     position = 0  # Crypto holding (in units of crypto)
@@ -20,17 +20,21 @@ def calculate_cumulative_asset(series_close, series_position, initial_cash=10000
 
         # Open Long position (Buy crypto)
         if position_signal == 1 and position == 0:
-            position = (cash / price) * trade_size  # Buy asset
-            cash = 0  
+            fee = cash * fee_rate 
+            position = ((cash - fee) / price) * trade_size  # Buy asset
+            cash = 0
 
         # Open Short position (Sell crypto)
         elif position_signal == -1 and position == 0:
-            position = -(cash / price) * trade_size  # Short sell asset
-            cash = 2 * cash  # Assume margin account usage for shorting
-
+            fee = cash * fee_rate
+            position = -((cash - fee) / price) * trade_size  # Short sell asset
+            cash = 2 * cash # Assume margin account usage for shorting
+            
         # Close Position (Sell or Cover Short)
         elif position_signal == 0 and position != 0:
-            cash += position * price  # Sell crypto or cover short
+            revenue = position * price
+            fee = abs(revenue) * fee_rate
+            cash += revenue - fee  # Sell crypto or cover short
             position = 0  # Reset position
 
         # Store values
@@ -53,8 +57,8 @@ def evaluate_strategy(df, risk_free_rate=0.0):
     df["Returns"] = df["Cumulative_Asset"].pct_change().fillna(0)
 
     # Sharpe Ratio
-    daily_return_mean = df["Returns"].mean()
-    daily_return_std = df["Returns"].std()
+    daily_return_mean = df["Returns"].mean() * 365 * 24 * 12
+    daily_return_std = df["Returns"].std() * np.sqrt(365 * 24 * 12)
     sharpe_ratio = (daily_return_mean - risk_free_rate) / daily_return_std if daily_return_std != 0 else np.nan
 
     # Maximum Drawdown (MDD)
