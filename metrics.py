@@ -13,6 +13,7 @@ def calculate_cumulative_asset(series_close, series_position, initial_cash=10000
     # Merge price and position into a DataFrame
     df = pd.concat([series_close, series_position], axis=1)
     df.columns = ["close", "Position"]
+    df = df.dropna()
 
     for i in range(len(df)):
         price = df["close"].iloc[i]
@@ -73,6 +74,7 @@ def evaluate_strategy(df, risk_free_rate=0.0):
 
     # Final Cumulative Return
     final_return = df["Cumulative_Asset"].iloc[-1] / df["Cumulative_Asset"].iloc[0] - 1
+    turnover = df["Position"].abs().sum() / df["Cumulative_Asset"].iloc[0]  # Total turnover relative to initial capital
 
     # Store results in a dictionary
     results = {
@@ -80,7 +82,8 @@ def evaluate_strategy(df, risk_free_rate=0.0):
         "Max Drawdown (%)": max_drawdown * 100,
         "Holding Win Rate (%)": win_rate * 100,
         "Trading Win Rate (%)": calculate_win_rate(df),
-        "Final Cumulative Return (%)": final_return * 100
+        "Final Cumulative Return (%)": final_return * 100,
+        "Turnover (%)": turnover * 100
     }
 
     return results

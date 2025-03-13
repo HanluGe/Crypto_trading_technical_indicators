@@ -5,6 +5,68 @@ from pandas.errors import PerformanceWarning
 warnings.simplefilter("ignore", PerformanceWarning)
 import numpy as np
 
+factor_categories = {
+    "Overlap Studies": [
+        "BBAND WIDTH", "BBAND UPPER SIGNAL", "BBAND LOWER SIGNAL", "RSI", "DEMA", "EMA", "H TRENDLINE", "KMAM",
+        "MIDPOINT", "MIDPRICE", "SAR", "SAREXT", "SMA3", "SMA5", "SMA10", "SMA20", "T", "TEMA", "TRIMA", "WMA"
+    ],
+    "Momentum Indicators": [
+        "ADX14", "ADX20", "ADXR", "APO", "AROONOSC", "BOP", "CCI3", "CCI5", "CCI10", "CCI14", "CMO", "DX",
+        "MACD", "MACDSIGNAL", "MACDHIST", "MINUS_DI", "MINUS_DM", "MOM1", "MOM3", "MOM5", "MOM10", 
+        "PLUSDI", "PLUSDM", "PPO", "ROC", "ROCP", "ROCR", "ROCR100", "RSI5", "RSI10", "RSI14", 
+        "SLOWK", "SLOWD", "FASTK", "FASTD", "TRIX", "ULTOSC", "WILLR"
+    ],
+    "Volatility Indicators": ["ATR", "NATR", "TRANGE"],
+    "Pattern Recognition": [
+        "CDL2CROWS", "CDL3BLACKCROWS", "CDL3INSIDE", "CDL3LINESTRIKE", "CDL3OUTSIDE", "CDL3STARSINSOUTH",
+        "CDL3WHITESOLDIERS", "DLABANDONEDBABY", "CDLADVANCEBLOCK", "CDLBELTHOLD", "CDLBREAKAWAY", 
+        "CDLCLOSINGMARUBOZU", "DLCONCEALBABYSWALL", "CDLCOUNTERATTACK", "CDLDARKCLOUDCOVER", "DLDOJI",
+        "CDLDOJISTAR", "DLDRAGONFLYDOJI", "DLENGULFING", "CDLEVENINGDOJISTAR", "CDLEVENINGSTAR", 
+        "CDLGAPSIDESIDEWHITE", "CDLGRAVESTONEDOJI", "CDLHAMMER", "CDLHANGINGMAN", "CDLHARAMI", "DLHARAMICROSS",
+        "CDLHIGHWAVE", "CDLHIKKAKE", "CDLHIKKAKEMOD", "CDLHOMINGPIGEON", "CDLIDENTICAL3CROWS", "CDLINNECK", 
+        "DLINVERTEDHAMMER", "DLKICKING", "CDLKICKINGBYLENGTH", "CDLLADDERBOTTOM", "CDLLONGLEGGEDDOJI", 
+        "CDLLONGLINE", "CDLMARUBOZU", "CDLMATCHINGLOW", "CDLMATHOLD", "CDLMORNINGDOJISTAR", "CDLMORNINGSTAR", 
+        "CDLONNECK", "CDLPIERCING", "DLRICKSHAWMAN", "CDLRISEFALL3METHODS", "CDLSEPARATINGLINES", 
+        "CDLSHOOTINGSTAR", "CDLSHORTLINE", "CDLSPINNINGTOP", "CDLSTALLEDPATTERN", "CDLSTICKSANDWICH", 
+        "CDLTAKURI", "CDLTASUKIGAP", "CDLTHRUSTING", "DLTRISTAR", "CDLUNIQUE3RIVER", "CDLUPSIDEGAP2CROWS", 
+        "CDLXSIDEGAP3METHODS"
+    ],
+    "Cycle Indicators": ["HTDCPERIOD", "HT DCPHASE", "TRENDMODE"]
+}
+
+def restructure_dataframe(df):
+    # Create a mapping of factor names to categories
+    factor_to_category = {
+        factor: category for category, factors in factor_categories.items() for factor in factors
+    }
+    
+    # Separate factor columns
+    factor_columns = [col for col in df.columns if col in factor_to_category]
+
+    # Create MultiIndex for columns
+    multi_index_columns = pd.MultiIndex.from_tuples(
+        [(factor_to_category[col], col) for col in factor_columns], 
+        names=["Category", "Factor"]
+    )
+
+    # Restructure the DataFrame
+    df_restructured = pd.DataFrame(df[factor_columns].values, index=df.index, columns=multi_index_columns)
+    
+    return df_restructured
+
+def compute_RSI(close, timeperiod=14):
+    """Compute the Relative Strength Index (RSI) using EMA."""
+    delta = close.diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+
+    avg_gain = gain.ewm(span=timeperiod, adjust=False).mean()
+    avg_loss = loss.ewm(span=timeperiod, adjust=False).mean()
+
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
 
 def compute_sarext(high, low, acceleration_init=0.02, acceleration_max=0.2, offset_on_reverse=0):
     """
@@ -117,6 +179,9 @@ def compute_technical_indicators(df, start_time, end_time):
     except Exception:
         for col in ['BBAND WIDTH', 'BBAND UPPER SIGNAL', 'BBAND LOWER SIGNAL']:
             indicator_dict[col] = None
+    
+
+    indicator_dict['RSI'] = compute_RSI(df_filtered['close'], timeperiod=14)
 
     try:
         indicator_dict['DEMA'] = talib.DEMA(df_filtered['close'], timeperiod=20)
