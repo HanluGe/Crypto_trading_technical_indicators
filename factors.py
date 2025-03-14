@@ -40,16 +40,16 @@ def restructure_dataframe(df):
         factor: category for category, factors in factor_categories.items() for factor in factors
     }
     
-    # Separate factor columns
+    # Identify factor columns in the DataFrame
     factor_columns = [col for col in df.columns if col in factor_to_category]
 
-    # Create MultiIndex for columns
+    # Create a MultiIndex for the columns
     multi_index_columns = pd.MultiIndex.from_tuples(
         [(factor_to_category[col], col) for col in factor_columns], 
         names=["Category", "Factor"]
     )
 
-    # Restructure the DataFrame
+    # Restructure the DataFrame using the new MultiIndex
     df_restructured = pd.DataFrame(df[factor_columns].values, index=df.index, columns=multi_index_columns)
     
     return df_restructured
@@ -67,62 +67,61 @@ def compute_RSI(close, timeperiod=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-
 def compute_sarext(high, low, acceleration_init=0.02, acceleration_max=0.2, offset_on_reverse=0):
     """
-    计算 Extended Parabolic SAR（基于基本的 Parabolic SAR 算法的扩展版本）。
+    Compute the Extended Parabolic SAR (an extension of the basic Parabolic SAR algorithm).
     
-    参数:
-        high, low: 数组，分别为每个周期的最高价和最低价。
-        acceleration_init: 初始加速因子（默认 0.02）。
-        acceleration_max: 加速因子的上限（默认 0.2）。
-        offset_on_reverse: 反转时的偏移（默认 0）。
+    Parameters:
+        high, low: arrays representing the high and low prices for each period.
+        acceleration_init: initial acceleration factor (default 0.02).
+        acceleration_max: maximum acceleration factor (default 0.2).
+        offset_on_reverse: offset when a reversal occurs (default 0).
     
-    返回:
-        numpy 数组，包含每个周期的 SAREXT 值。
+    Returns:
+        numpy array containing the SAREXT values for each period.
     """
     n = len(high)
     sar = np.zeros(n)
     
-    # 根据前两个周期判断初始趋势
+    # Determine the initial trend based on the first two periods
     if high[1] > high[0]:
-        trend = 1  # 上升趋势
-        sar[0] = low[0]  # 初始 SAR 为第一周期最低价
-        ep = high[0]     # 极值点为第一周期最高价
+        trend = 1  # Uptrend
+        sar[0] = low[0]  # Initial SAR is set to the first period's low price
+        ep = high[0]     # Extreme point is set to the first period's high price
     else:
-        trend = -1  # 下降趋势
+        trend = -1  # Downtrend
         sar[0] = high[0]
         ep = low[0]
         
     acceleration = acceleration_init
 
     for i in range(1, n):
-        # 计算 SAR
+        # Calculate SAR
         sar[i] = sar[i-1] + acceleration * (ep - sar[i-1])
-        # 对于上升趋势，SAR 不能超过前两周期的最低价
+        # For an uptrend, SAR cannot exceed the low prices of the previous two periods
         if trend == 1 and i >= 2:
             sar[i] = min(sar[i], low[i-1], low[i-2])
-        # 对于下降趋势，SAR 不能低于前两周期的最高价
+        # For a downtrend, SAR cannot be lower than the high prices of the previous two periods
         if trend == -1 and i >= 2:
             sar[i] = max(sar[i], high[i-1], high[i-2])
         
-        # 检查是否发生反转
+        # Check for reversal
         if trend == 1:
             if low[i] < sar[i]:
-                # 反转为下降趋势
+                # Reverse to a downtrend
                 trend = -1
-                sar[i] = ep  # 反转时 SAR 设为前一趋势的极值
-                sar[i] *= (1 + offset_on_reverse)  # 应用偏移
-                ep = low[i]  # 重置极值点为当前最低价
+                sar[i] = ep  # Set SAR to the extreme point of the previous trend upon reversal
+                sar[i] *= (1 + offset_on_reverse)  # Apply offset
+                ep = low[i]  # Reset the extreme point to the current low price
                 acceleration = acceleration_init
             else:
-                # 上升趋势中更新极值点和加速因子
+                # In an uptrend, update the extreme point and acceleration factor if a new high is observed
                 if high[i] > ep:
                     ep = high[i]
                     acceleration = min(acceleration + acceleration_init, acceleration_max)
         else:  # trend == -1
             if high[i] > sar[i]:
-                # 反转为上升趋势
+                # Reverse to an uptrend
                 trend = 1
                 sar[i] = ep
                 sar[i] *= (1 - offset_on_reverse)
@@ -134,42 +133,41 @@ def compute_sarext(high, low, acceleration_init=0.02, acceleration_max=0.2, offs
                     acceleration = min(acceleration + acceleration_init, acceleration_max)
     return sar
 
-
 def compute_technical_indicators(df, start_time, end_time):
     """
-    使用 TA-Lib 计算论文中列出的 124 个技术因子，
-    输入数据必须包含以下列：open, high, low, close, preclose, volume，
-    日期信息存储在 "date" 列中或作为索引
+    Calculate the 124 technical indicators listed in the paper using TA-Lib.
+    The input data must include the following columns: open, high, low, close, preclose, volume.
+    Date information is stored in the "date" column or as the index.
 
-    参数:
-        df (pd.DataFrame): 原始数据
-        start_time (str 或 pd.Timestamp): 起始时间（包含）
-        end_time (str 或 pd.Timestamp): 终止时间（包含）
+    Parameters:
+        df (pd.DataFrame): The raw data.
+        start_time (str or pd.Timestamp): The start time (inclusive).
+        end_time (str or pd.Timestamp): The end time (inclusive).
 
-    返回:
-        pd.DataFrame: 将原始数据与计算得到的指标拼接后的 DataFrame
+    Returns:
+        pd.DataFrame: The DataFrame obtained by concatenating the raw data and the calculated indicators.
     """
-    # 转换起止时间为 Timestamp
+    # Convert start and end times to Timestamp objects
     start_time = pd.to_datetime(start_time)
     end_time = pd.to_datetime(end_time)
     
-    # 判断日期信息是存储在列中还是作为索引
+    # Determine whether date information is stored in a column or as the index
     if 'date' in df.columns:
-        # 如果存在 "date" 列，则转换为 datetime 类型
+        # If the "date" column exists, convert it to datetime type if necessary
         if not pd.api.types.is_datetime64_any_dtype(df['date']):
             df['date'] = pd.to_datetime(df['date'])
         df_filtered = df[(df['date'] >= start_time) & (df['date'] <= end_time)].copy()
     else:
-        # 如果没有 "date" 列，则假设日期存储在索引中
+        # If there is no "date" column, assume that the index contains date information
         if not isinstance(df.index, pd.DatetimeIndex):
             df.index = pd.to_datetime(df.index)
         df_filtered = df[(df.index >= start_time) & (df.index <= end_time)].copy()
     
-    # 用字典存储所有指标结果，避免多次插入 DataFrame 导致内存碎片
+    # Use a dictionary to store all indicator results to avoid memory fragmentation from multiple DataFrame insertions
     indicator_dict = {}
 
     # ====================
-    # 1. 重叠研究指标（Overlap Studies）
+    # 1. Overlap Studies Indicators
     # ====================
     try:
         bb_upper, bb_middle, bb_lower = talib.BBANDS(df_filtered['close'], timeperiod=20)
@@ -179,7 +177,6 @@ def compute_technical_indicators(df, start_time, end_time):
     except Exception:
         for col in ['BBAND WIDTH', 'BBAND UPPER SIGNAL', 'BBAND LOWER SIGNAL']:
             indicator_dict[col] = None
-    
 
     indicator_dict['RSI'] = compute_RSI(df_filtered['close'], timeperiod=14)
 
@@ -253,7 +250,7 @@ def compute_technical_indicators(df, start_time, end_time):
         indicator_dict['WMA'] = None
 
     # ====================
-    # 2. 动量指标（Momentum Indicators）
+    # 2. Momentum Indicators
     # ====================
     try:
         indicator_dict['ADX14'] = talib.ADX(df_filtered['high'], df_filtered['low'], df_filtered['close'], timeperiod=14)
@@ -399,7 +396,7 @@ def compute_technical_indicators(df, start_time, end_time):
         indicator_dict['WILLR'] = None
 
     # ====================
-    # 3. 波动率指标（Volatility Indicators）
+    # 3. Volatility Indicators
     # ====================
     try:
         indicator_dict['ATR'] = talib.ATR(df_filtered['high'], df_filtered['low'], df_filtered['close'], timeperiod=14)
@@ -417,7 +414,7 @@ def compute_technical_indicators(df, start_time, end_time):
         indicator_dict['TRANGE'] = None
 
     # ====================
-    # 4. 图形识别指标（Pattern Recognition）
+    # 4. Pattern Recognition Indicators
     # ====================
     pattern_mapping = {
         "CDL2CROWS": "CDL2CROWS",
@@ -490,7 +487,7 @@ def compute_technical_indicators(df, start_time, end_time):
             indicator_dict[key] = None
 
     # ====================
-    # 5. 周期指标（Cycle Indicators）
+    # 5. Cycle Indicators
     # ====================
     try:
         indicator_dict['HTDCPERIOD'] = talib.HT_DCPERIOD(df_filtered['close'])
@@ -507,9 +504,9 @@ def compute_technical_indicators(df, start_time, end_time):
     except Exception:
         indicator_dict['TRENDMODE'] = None
 
-    # 构造指标 DataFrame，并调用 .copy() 整理内存布局
+    # Construct the indicators DataFrame and call .copy() to optimize memory layout
     indicators = pd.DataFrame(indicator_dict, index=df_filtered.index).copy()
     
-    # 合并原始数据与指标数据
+    # Merge the original data with the indicator data
     result_df = pd.concat([df_filtered, indicators], axis=1)
     return result_df

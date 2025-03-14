@@ -3,30 +3,31 @@ import numpy as np
 
 def generate_labels(df, price_col='close'):
     """
-    根据输入的 DataFrame 生成收益标签，按照如下划分：
-      - next_return 在 [-∞, -0.1) 内 → 标签 -2
-      - next_return 在 [-0.1, -0.02) 内 → 标签 -1
-      - next_return 在 [-0.02, 0.02) 内 → 标签 0
-      - next_return 在 [0.02, 0.1) 内 → 标签 1
-      - next_return 在 [0.1, +∞) 内 → 标签 2
+    Generate return labels based on the input DataFrame, divided as follows:
+      - If next_return is in [-∞, -0.1), label is -2
+      - If next_return is in [-0.1, -0.02), label is -1
+      - If next_return is in [-0.02, 0.02), label is 0
+      - If next_return is in [0.02, 0.1), label is 1
+      - If next_return is in [0.1, +∞), label is 2
 
-    计算方法：
-      对于每一行（假设数据已按日期升序排列），计算下一日收益率：
+    Calculation:
+      For each row (assuming the data is sorted in ascending order by date), calculate the next day's return:
          next_return = (next_day_price / current_price - 1) * 100
          
-    参数:
-       df: 包含价格数据的 DataFrame，必须按日期升序排列
-       price_col: 用于计算收益率的价格列名称，默认为 'close'
+    Parameters:
+       df: A DataFrame containing price data, which must be sorted in ascending order by date.
+       price_col: The name of the price column used to calculate returns, default is 'close'.
        
-    返回:
-       一个与 df 行数相同的 Series，表示对应的标签；最后一行由于缺少下一日数据，标签为 NaN。
+    Returns:
+       A Series with the same number of rows as df representing the corresponding labels;
+       the last row has a label of NaN because of the absence of next-day data.
     """
     df = df.copy()
-    # 计算下一日收益率，并转换为百分比
+    # Calculate the next day's return and convert it to a percentage
     df['next_return'] = df[price_col].shift(-1) / df[price_col] - 1
     df['next_return'] *= 100
 
-    # 定义新的区间边界
+    # Define the new interval boundaries
     bins = [-np.inf, -0.1, -0.02, 0.02, 0.1, np.inf]
     labels = [-2, -1, 0, 1, 2]
 
